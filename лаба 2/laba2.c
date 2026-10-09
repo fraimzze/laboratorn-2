@@ -31,6 +31,10 @@ typedef struct {
 
     int  cannot_be_zero[MAX_LETTERS];
 
+    long long weight[MAX_LETTERS];
+
+    int  uses_only_add_sub;
+
     char original[MAX_INPUT];
 } Puzzle;
 
@@ -110,6 +114,38 @@ int parse_rebus(const char* input, Puzzle* puzzle) {
     return (puzzle->term_count >= 2) ? 0 : -1;
 }
 
+void compute_weights(Puzzle* puzzle) {
+    for (int i = 0; i < puzzle->letter_count; i++) {
+        puzzle->weight[i] = 0;
+    }
+
+    int sign = 1;
+    for (int i = 0; i < puzzle->term_count; i++) {
+        long long pow10 = 1;
+        for (int j = puzzle->term_length[i] - 1; j >= 0; j--) {
+            puzzle->weight[puzzle->term[i][j]] += sign * pow10;
+            pow10 *= 10;
+        }
+        if (i < puzzle->term_count - 1 && puzzle->operator[i] == OP_SUB) {
+            sign = -sign;
+        }
+    }
+
+    long long pow10 = 1;
+    for (int j = puzzle->result_length - 1; j >= 0; j--) {
+        puzzle->weight[puzzle->result[j]] -= pow10;
+        pow10 *= 10;
+    }
+
+    puzzle->uses_only_add_sub = 1;
+    for (int i = 0; i < puzzle->term_count - 1; i++) {
+        if (puzzle->operator[i] == OP_MUL || puzzle->operator[i] == OP_DIV) {
+            puzzle->uses_only_add_sub = 0;
+            break;
+        }
+    }
+}
+
 long long word_to_number(const int* word, int length, const int* digits) {
     long long value = 0;
     for (int i = 0; i < length; i++) {
@@ -163,6 +199,14 @@ int evaluate_expression(const Puzzle* puzzle, const int* digits, long long* outp
 int is_solution(const Puzzle* puzzle, const int* digits) {
     for (int i = 0; i < puzzle->letter_count; i++) {
         if (puzzle->cannot_be_zero[i] && digits[i] == 0) return 0;
+    }
+
+    if (puzzle->uses_only_add_sub) {
+        long long total = 0;
+        for (int i = 0; i < puzzle->letter_count; i++) {
+            total += puzzle->weight[i] * digits[i];
+        }
+        return total == 0;
     }
 
     long long left_value;
@@ -226,6 +270,8 @@ char* solve_rebus(const char* input) {
     if (parse_rebus(input, &puzzle) != 0) {
         return NULL;
     }
+
+    compute_weights(&puzzle);
 
     int answer[MAX_LETTERS];
     if (!solve(&puzzle, answer)) {
