@@ -33,6 +33,8 @@ typedef struct {
 
     long long weight[MAX_LETTERS];
 
+    int  order[MAX_LETTERS];
+
     int  uses_only_add_sub;
 
     char original[MAX_INPUT];
@@ -142,6 +144,39 @@ void compute_weights(Puzzle* puzzle) {
         if (puzzle->operator[i] == OP_MUL || puzzle->operator[i] == OP_DIV) {
             puzzle->uses_only_add_sub = 0;
             break;
+        }
+    }
+}
+void build_letter_order(Puzzle* puzzle) {
+    int distance[MAX_LETTERS];
+    for (int i = 0; i < puzzle->letter_count; i++) distance[i] = 1000;
+
+    for (int w = 0; w < puzzle->term_count; w++) {
+        int len = puzzle->term_length[w];
+        for (int j = 0; j < len; j++) {
+            int letter = puzzle->term[w][j];
+            int dist = len - 1 - j;
+            if (dist < distance[letter]) distance[letter] = dist;
+        }
+    }
+
+    int len = puzzle->result_length;
+    for (int j = 0; j < len; j++) {
+        int letter = puzzle->result[j];
+        int dist = len - 1 - j;
+        if (dist < distance[letter]) distance[letter] = dist;
+    }
+
+    for (int i = 0; i < puzzle->letter_count; i++) puzzle->order[i] = i;
+
+    for (int i = 0; i < puzzle->letter_count - 1; i++) {
+        for (int j = i + 1; j < puzzle->letter_count; j++) {
+            int a = puzzle->order[i];
+            int b = puzzle->order[j];
+            if (distance[a] > distance[b]) {
+                puzzle->order[i] = b;
+                puzzle->order[j] = a;
+            }
         }
     }
 }
@@ -276,19 +311,21 @@ int search(const Puzzle* puzzle, int* digits, int* used, int* assigned, int dept
         return 0;
     }
 
+    int letter = puzzle->order[depth];
+
     for (int digit = 0; digit <= 9; digit++) {
         if (used[digit]) continue;
-        if (puzzle->cannot_be_zero[depth] && digit == 0) continue;
+        if (puzzle->cannot_be_zero[letter] && digit == 0) continue;
 
         used[digit] = 1;
-        assigned[depth] = 1;
-        digits[depth] = digit;
+        assigned[letter] = 1;
+        digits[letter] = digit;
 
         if (check_columns(puzzle, digits, assigned)) {
             if (search(puzzle, digits, used, assigned, depth + 1, answer)) return 1;
         }
 
-        assigned[depth] = 0;
+        assigned[letter] = 0;
         used[digit] = 0;
     }
     return 0;
@@ -308,6 +345,7 @@ char* solve_rebus(const char* input) {
     }
 
     compute_weights(&puzzle);
+    build_letter_order(&puzzle);
 
     int answer[MAX_LETTERS];
     if (!solve(&puzzle, answer)) {
