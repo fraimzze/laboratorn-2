@@ -195,7 +195,37 @@ int evaluate_expression(const Puzzle* puzzle, const int* digits, long long* outp
     *output = result;
     return 1;
 }
+int check_columns(const Puzzle* puzzle, const int* digits, const int* assigned) {
+    int max_length = puzzle->result_length;
+    for (int i = 0; i < puzzle->term_count; i++) {
+        if (puzzle->term_length[i] > max_length) max_length = puzzle->term_length[i];
+    }
 
+    int carry = 0;
+    for (int col = 0; col < max_length; col++) {
+        int all_assigned = 1;
+        int sum = carry;
+
+        for (int i = 0; i < puzzle->term_count; i++) {
+            int len = puzzle->term_length[i];
+            if (col >= len) continue;
+            int letter = puzzle->term[i][len - 1 - col];
+            if (!assigned[letter]) { all_assigned = 0; break; }
+            sum += digits[letter];
+        }
+
+        if (!all_assigned) return 1;
+
+        if (col >= puzzle->result_length) return 0;
+
+        int res_letter = puzzle->result[puzzle->result_length - 1 - col];
+        if (!assigned[res_letter]) return 1;
+
+        if (sum % 10 != digits[res_letter]) return 0;
+        carry = sum / 10;
+    }
+    return carry == 0;
+}
 int is_solution(const Puzzle* puzzle, const int* digits) {
     for (int i = 0; i < puzzle->letter_count; i++) {
         if (puzzle->cannot_be_zero[i] && digits[i] == 0) return 0;
@@ -237,7 +267,7 @@ void build_answer(const Puzzle* puzzle, const int* digits, char* output, size_t 
     output[out] = 0;
 }
 
-int search(const Puzzle* puzzle, int* digits, int* used, int depth, int* answer) {
+int search(const Puzzle* puzzle, int* digits, int* used, int* assigned, int depth, int* answer) {
     if (depth == puzzle->letter_count) {
         if (is_solution(puzzle, digits)) {
             memcpy(answer, digits, puzzle->letter_count * sizeof(int));
@@ -248,12 +278,17 @@ int search(const Puzzle* puzzle, int* digits, int* used, int depth, int* answer)
 
     for (int digit = 0; digit <= 9; digit++) {
         if (used[digit]) continue;
+        if (puzzle->cannot_be_zero[depth] && digit == 0) continue;
 
         used[digit] = 1;
+        assigned[depth] = 1;
         digits[depth] = digit;
 
-        if (search(puzzle, digits, used, depth + 1, answer)) return 1;
+        if (check_columns(puzzle, digits, assigned)) {
+            if (search(puzzle, digits, used, assigned, depth + 1, answer)) return 1;
+        }
 
+        assigned[depth] = 0;
         used[digit] = 0;
     }
     return 0;
@@ -262,7 +297,8 @@ int search(const Puzzle* puzzle, int* digits, int* used, int depth, int* answer)
 int solve(const Puzzle* puzzle, int* answer) {
     int digits[MAX_LETTERS] = { 0 };
     int used[10] = { 0 };
-    return search(puzzle, digits, used, 0, answer);
+    int assigned[MAX_LETTERS] = { 0 };
+    return search(puzzle, digits, used, assigned, 0, answer);
 }
 
 char* solve_rebus(const char* input) {
