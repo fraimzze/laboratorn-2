@@ -302,7 +302,7 @@ void build_answer(const Puzzle* puzzle, const int* digits, char* output, size_t 
     output[out] = 0;
 }
 
-int search(const Puzzle* puzzle, int* digits, int* used, int* assigned, int depth, int* answer) {
+int search(const Puzzle* puzzle, int* digits, int used_mask, int* assigned, int depth, int* answer) {
     if (depth == puzzle->letter_count) {
         if (is_solution(puzzle, digits)) {
             memcpy(answer, digits, puzzle->letter_count * sizeof(int));
@@ -312,30 +312,28 @@ int search(const Puzzle* puzzle, int* digits, int* used, int* assigned, int dept
     }
 
     int letter = puzzle->order[depth];
+    int bit = 1;
 
-    for (int digit = 0; digit <= 9; digit++) {
-        if (used[digit]) continue;
+    for (int digit = 0; digit <= 9; digit++, bit <<= 1) {
+        if (used_mask & bit) continue;
         if (puzzle->cannot_be_zero[letter] && digit == 0) continue;
 
-        used[digit] = 1;
         assigned[letter] = 1;
         digits[letter] = digit;
 
         if (check_columns(puzzle, digits, assigned)) {
-            if (search(puzzle, digits, used, assigned, depth + 1, answer)) return 1;
+            if (search(puzzle, digits, used_mask | bit, assigned, depth + 1, answer)) return 1;
         }
 
         assigned[letter] = 0;
-        used[digit] = 0;
     }
     return 0;
 }
 
 int solve(const Puzzle* puzzle, int* answer) {
     int digits[MAX_LETTERS] = { 0 };
-    int used[10] = { 0 };
     int assigned[MAX_LETTERS] = { 0 };
-    return search(puzzle, digits, used, assigned, 0, answer);
+    return search(puzzle, digits, 0, assigned, 0, answer);
 }
 
 char* solve_rebus(const char* input) {
