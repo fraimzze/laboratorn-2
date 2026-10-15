@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+﻿#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +36,7 @@ typedef struct {
     int  order[MAX_LETTERS];
 
     int  uses_only_add_sub;
+    int  only_add;
 
     char original[MAX_INPUT];
 } Puzzle;
@@ -59,7 +60,9 @@ int read_word(Puzzle* puzzle, const char* text, int* word, int* word_length) {
     }
     if (length == 0) return -1;
     *word_length = length;
-    puzzle->cannot_be_zero[word[0]] = 1;
+    if (length > 1) {
+        puzzle->cannot_be_zero[word[0]] = 1;
+    }
     return length;
 }
 
@@ -112,6 +115,7 @@ int parse_rebus(const char* input, Puzzle* puzzle) {
         &puzzle->result_length) < 0) return -1;
 
     if (right_side[puzzle->result_length] != 0) return -1;
+    if (puzzle->letter_count > 10) return -1;
 
     return (puzzle->term_count >= 2) ? 0 : -1;
 }
@@ -140,13 +144,17 @@ void compute_weights(Puzzle* puzzle) {
     }
 
     puzzle->uses_only_add_sub = 1;
+    puzzle->only_add = 1;
     for (int i = 0; i < puzzle->term_count - 1; i++) {
         if (puzzle->operator[i] == OP_MUL || puzzle->operator[i] == OP_DIV) {
             puzzle->uses_only_add_sub = 0;
-            break;
+        }
+        if (puzzle->operator[i] != OP_ADD) {
+            puzzle->only_add = 0;
         }
     }
 }
+
 void build_letter_order(Puzzle* puzzle) {
     int distance[MAX_LETTERS];
     for (int i = 0; i < puzzle->letter_count; i++) distance[i] = 1000;
@@ -230,6 +238,7 @@ int evaluate_expression(const Puzzle* puzzle, const int* digits, long long* outp
     *output = result;
     return 1;
 }
+
 int check_columns(const Puzzle* puzzle, const int* digits, const int* assigned) {
     int max_length = puzzle->result_length;
     for (int i = 0; i < puzzle->term_count; i++) {
@@ -261,6 +270,7 @@ int check_columns(const Puzzle* puzzle, const int* digits, const int* assigned) 
     }
     return carry == 0;
 }
+
 int is_solution(const Puzzle* puzzle, const int* digits) {
     for (int i = 0; i < puzzle->letter_count; i++) {
         if (puzzle->cannot_be_zero[i] && digits[i] == 0) return 0;
@@ -302,7 +312,7 @@ void build_answer(const Puzzle* puzzle, const int* digits, char* output, size_t 
     output[out] = 0;
 }
 
-int search(const Puzzle* puzzle, int* digits, int used_mask, int* assigned, int depth, int* answer) {
+int search(const Puzzle* puzzle, int* digits, short used_mask, int* assigned, int depth, int* answer) {
     if (depth == puzzle->letter_count) {
         if (is_solution(puzzle, digits)) {
             memcpy(answer, digits, puzzle->letter_count * sizeof(int));
@@ -312,7 +322,7 @@ int search(const Puzzle* puzzle, int* digits, int used_mask, int* assigned, int 
     }
 
     int letter = puzzle->order[depth];
-    int bit = 1;
+    short bit = 1;
 
     for (int digit = 0; digit <= 9; digit++, bit <<= 1) {
         if (used_mask & bit) continue;
@@ -321,7 +331,7 @@ int search(const Puzzle* puzzle, int* digits, int used_mask, int* assigned, int 
         assigned[letter] = 1;
         digits[letter] = digit;
 
-        if (check_columns(puzzle, digits, assigned)) {
+        if (!puzzle->only_add || check_columns(puzzle, digits, assigned)) {
             if (search(puzzle, digits, used_mask | bit, assigned, depth + 1, answer)) return 1;
         }
 
@@ -341,7 +351,6 @@ char* solve_rebus(const char* input) {
     if (parse_rebus(input, &puzzle) != 0) {
         return NULL;
     }
-
     compute_weights(&puzzle);
     build_letter_order(&puzzle);
 
@@ -383,8 +392,9 @@ int main(void) {
         return 1;
     }
 
+    double elapsed_ms = (double)(finish - start) * 1000.0 / CLOCKS_PER_SEC;
     printf("Solution: %s\n", solution);
-    printf("Time: %.4f s\n", (double)(finish - start) / CLOCKS_PER_SEC);
+    printf("Time: %.2f ms\n", elapsed_ms);
 
     free(solution);
     return 0;
